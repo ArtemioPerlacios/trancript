@@ -1,0 +1,58 @@
+name: Transcripción de video con Whisper
+
+on:
+  push:
+    branches:
+      - main  # Ejecutar el workflow cuando haya cambios en la rama main
+  workflow_dispatch:  # Permite ejecutar el workflow manualmente desde la interfaz de GitHub
+
+jobs:
+  transcribe-video:
+    runs-on: ubuntu-latest  # Usar un entorno de Ubuntu
+
+    steps:
+      # Paso 1: Descargar el código fuente
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      # Paso 2: Configurar Python
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8  # Puedes elegir la versión de Python que prefieras
+
+      # Paso 3: Instalar dependencias
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yt-dlp openai-whisper
+
+      # Paso 4: Descargar el video usando yt-dlp
+      - name: Download video using yt-dlp
+        run: |
+          video_url="https://app.screencast.com/n3vk4v14s2Gul?conversation=fbz5JkB4BUTUkUYCf9YlOr"
+          yt-dlp -o "video_temp.mp4" $video_url
+
+      # Paso 5: Transcribir el video con Whisper
+      - name: Transcribe video with Whisper
+        run: |
+          python -c "
+import whisper
+model = whisper.load_model('base')
+result = model.transcribe('video_temp.mp4')
+with open('transcription.txt', 'w') as f:
+    f.write(result['text'])
+          "
+
+      # Paso 6: Subir la transcripción a GitHub como artefacto (opcional)
+      - name: Upload transcription as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: transcription
+          path: transcription.txt
+
+      # Paso 7: Limpiar el archivo temporal (si lo deseas)
+      - name: Clean up temporary files
+        run: |
+          rm video_temp.mp4
+
