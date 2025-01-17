@@ -36,29 +36,26 @@ jobs:
       # Paso 5: Crear script para transcribir
       - name: Create transcription script
         run: |
-          echo "import whisper
+          cat << EOF > transcribe.py
+import whisper
 model = whisper.load_model('base')
 result = model.transcribe('video_temp.mp4')
 with open('transcription.txt', 'w', encoding='utf-8') as f:
-    f.write(result['text'])" > transcribe.py
+    f.write(result['text'])
+EOF
 
-      # Paso 6: Formatear el archivo para asegurar indentación
-      - name: Fix Python indentation
-        run: |
-          sed -i 's/^    f.write/f.write/' transcribe.py
-
-      # Paso 7: Ejecutar el script para transcribir
+      # Paso 6: Ejecutar el script para transcribir
       - name: Transcribe video
         run: python transcribe.py
 
-      # Paso 8: Subir el archivo transcrito como artefacto
+      # Paso 7: Subir el archivo transcrito como artefacto
       - name: Upload transcription
         uses: actions/upload-artifact@v3
         with:
           name: transcription
           path: transcription.txt
 
-      # Paso 9: Limpiar archivos temporales
+      # Paso 8: Limpiar archivos temporales
       - name: Cleanup
         run: rm -f video_temp.mp4 transcription.txt transcribe.py
 
