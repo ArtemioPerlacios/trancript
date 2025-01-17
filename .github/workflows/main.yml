@@ -30,8 +30,7 @@ jobs:
       # Paso 4: Descargar el video usando yt-dlp
       - name: Download video using yt-dlp
         run: |
-          video_url="https://app.screencast.com/n3vk4v14s2Gul?conversation=fbz5JkB4BUTUkUYCf9YlOr"
-          yt-dlp -o "video_temp.mp4" $video_url
+          yt-dlp -o "video_temp.mp4" "https://app.screencast.com/n3vk4v14s2Gul?conversation=fbz5JkB4BUTUkUYCf9YlOr"
 
       # Paso 5: Transcribir el video con Whisper
       - name: Transcribe video with Whisper
@@ -44,14 +43,14 @@ with open('transcription.txt', 'w') as f:
     f.write(result['text'])
           "
 
-      # Paso 6: Subir la transcripción a GitHub como artefacto (opcional)
+      # Paso 6: Subir la transcripción a GitHub como artefacto
       - name: Upload transcription as artifact
         uses: actions/upload-artifact@v2
         with:
           name: transcription
           path: transcription.txt
 
-      # Paso 7: Limpiar el archivo temporal (si lo deseas)
+      # Paso 7: Limpiar el archivo temporal
       - name: Clean up temporary files
         run: |
           rm video_temp.mp4
