@@ -37,12 +37,12 @@ jobs:
       - name: Create transcription script
         run: |
           cat << EOF > transcribe.py
-import whisper
-model = whisper.load_model('base')
-result = model.transcribe('video_temp.mp4')
-with open('transcription.txt', 'w', encoding='utf-8') as f:
-    f.write(result['text'])
-EOF
+          import whisper
+          model = whisper.load_model('base')
+          result = model.transcribe('video_temp.mp4')
+          with open('transcription.txt', 'w', encoding='utf-8') as f:
+              f.write(result['text'])
+          EOF
 
       # Paso 6: Ejecutar el script para transcribir
       - name: Transcribe video
