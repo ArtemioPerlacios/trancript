@@ -5,6 +5,10 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      video_url:
+        description: "URL del video"
+        required: true
 
 jobs:
   transcribe-video:
@@ -19,32 +23,30 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: 3.8
+          python-version: 3.10
 
-      # Paso 3: Instalar dependencias necesarias
+      # Paso 3: Cachear dependencias de Python
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # Paso 4: Instalar dependencias necesarias
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          python -m pip install --upgrade pip
-          pip install yt-dlp git+https://github.com/openai/whisper.git
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-      # Paso 4: Descargar el video usando yt-dlp
+      # Paso 5: Descargar el video usando yt-dlp
       - name: Download video
-        run: yt-dlp -o "video_temp.mp4" "https://app.screencast.com/n3vk4v14s2Gul?conversation=fbz5JkB4BUTUkUYCf9YlOr"
+        run: yt-dlp -o "video_temp.mp4" "${{ github.event.inputs.video_url }}"
 
-      # Paso 5: Crear script para transcribir
-      - name: Create transcription script
-        run: |
-          cat << EOF > transcribe.py
-          import whisper
-          model = whisper.load_model('base')
-          result = model.transcribe('video_temp.mp4')
-          with open('transcription.txt', 'w', encoding='utf-8') as f:
-              f.write(result['text'])
-          EOF
-
-      # Paso 6: Ejecutar el script para transcribir
+      # Paso 6: Ejecutar el script para transcribir (ya existente en el repositorio)
       - name: Transcribe video
         run: python transcribe.py
 
@@ -57,6 +59,8 @@ jobs:
 
       # Paso 8: Limpiar archivos temporales
       - name: Cleanup
-        run: rm -f video_temp.mp4 transcription.txt transcribe.py
+        run: |
+          rm -f video_temp.mp4 transcription.txt || true
+
 
 
