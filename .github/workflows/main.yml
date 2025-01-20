@@ -51,13 +51,15 @@ jobs:
       # Paso 7: Ejecutar el script para transcribir el audio
       - name: Transcribe audio
         run: python transcribe.py --audio audio_temp.wav
-        
+
       # Paso 8: Generar resumen utilizando la API de Groq
       - name: Generate Summary
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python summarize.py  # Llama al script que genera el resumen
 
-      # Paso 9: Subir el archivo transcrito como artefacto
-      - name: Upload transcription
+      # Paso 9: Subir los archivos como artefactos
+      - name: Upload transcription and summary
         uses: actions/upload-artifact@v3
         with:
           name: transcription-and-summary
@@ -69,6 +71,4 @@ jobs:
       - name: Cleanup
         run: |
           rm -f video_temp.mp4 audio_temp.wav transcription.txt summary.txt || true
-
-
 
