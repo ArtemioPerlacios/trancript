@@ -1,9 +1,6 @@
 name: Transcripción de video con Whisper
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       video_url:
@@ -46,21 +43,26 @@ jobs:
       - name: Download video
         run: yt-dlp -o "video_temp.mp4" "${{ github.event.inputs.video_url }}"
 
-      # Paso 6: Ejecutar el script para transcribir (ya existente en el repositorio)
-      - name: Transcribe video
-        run: python transcribe.py
+      # Paso 6: Extraer audio del video (solo audio, sin video)
+      - name: Extract audio from video
+        run: |
+          ffmpeg -i video_temp.mp4 -vn -acodec pcm_s16le -ar 44100 -ac 2 audio_temp.wav
 
-      # Paso 7: Subir el archivo transcrito como artefacto
+      # Paso 7: Ejecutar el script para transcribir el audio
+      - name: Transcribe audio
+        run: python transcribe.py --audio audio_temp.wav
+
+      # Paso 8: Subir el archivo transcrito como artefacto
       - name: Upload transcription
         uses: actions/upload-artifact@v3
         with:
           name: transcription
           path: transcription.txt
 
-      # Paso 8: Limpiar archivos temporales
+      # Paso 9: Limpiar archivos temporales
       - name: Cleanup
         run: |
-          rm -f video_temp.mp4 transcription.txt || true
+          rm -f video_temp.mp4 audio_temp.wav transcription.txt || true
 
 
 
