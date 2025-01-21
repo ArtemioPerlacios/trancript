@@ -23,41 +23,53 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
+      - name: Install Python dependencies
+        run: |
           python -m pip install --upgrade pip
-          pip install yt-dlp requests beautifulsoup4
-
-      - name: Save cookies
+          pip install -r requirements.txt
+          pip install yt-dlp
+      - name: Validate SharePoint URL
         run: |
-          echo "${{ secrets.SHAREPOINT_COOKIES }}" > cookies.txt
+          if [[ ! "${{ github.event.inputs.video_url }}" =~ .*sharepoint\.com.* ]]; then
+            echo "Error: La URL proporcionada no es de SharePoint"
+            exit 1
+          fi
 
-      - name: Download video
+      - name: Download video using Edge cookies
         id: download
+        continue-on-error: true
         run: |
-          yt-dlp --cookies cookies.txt \
-                 --extract-audio \
-                 --audio-format wav \
-                 --audio-quality 0 \
-                 -o "audio_temp.%(ext)s" \
-                 "${{ github.event.inputs.video_url }}"
-
+          yt-dlp --cookies-from-browser edge \
+                 -o "video_temp.%(ext)s" \
+                 '${{ github.event.inputs.video_url }}'
+      - name: Check download status
+        if: steps.download.outcome == 'failure'
+        run: |
+          echo "Error: No se pudo descargar el video. Verifica la URL y las cookies."
+          exit 1
       - name: Transcribe audio
-        if: success()
         env:
           WHISPER_MODEL: "base"
           LANGUAGE: ${{ github.event.inputs.language }}
-        run: python transcribe.py --audio audio_temp.wav --model ${WHISPER_MODEL} --language ${LANGUAGE}
-
+        run: |
+          python transcribe.py \
+            --audio video_temp.mp4 \
+            --model ${WHISPER_MODEL} \
+            --language ${LANGUAGE}
       - name: Generate Summary
-        if: success()
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: python summarize.py
-
-      - name: Upload results
+        run: |
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "Error: No se encontró la API key de Groq"
+            exit 1
+          fi
+          python summarize.py
+      - name: Upload artifacts
         if: success()
         uses: actions/upload-artifact@v3
         with:
@@ -69,4 +81,11 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -f audio_temp.* cookies.txt transcription.txt summary.md || true
+        run: |
+          rm -f video_temp.* transcription.txt summary.md || true
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "El workflow falló. Por favor revisa los logs para más detalles."
+          exit 1
+
