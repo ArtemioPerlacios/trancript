@@ -39,11 +39,19 @@ jobs:
             exit 1
           fi
 
-      - name: Download video using Edge cookies
+      - name: Save cookies
+        run: |
+          if [ -z "${{ secrets.SHAREPOINT_COOKIES }}" ]; then
+            echo "Error: No se encontraron las cookies de SharePoint"
+            exit 1
+          fi
+          echo "${{ secrets.SHAREPOINT_COOKIES }}" > cookies.txt
+
+      - name: Download video
         id: download
         continue-on-error: true
         run: |
-          yt-dlp --cookies-from-browser edge \
+          yt-dlp --cookies cookies.txt \
                  -o "video_temp.%(ext)s" \
                  '${{ github.event.inputs.video_url }}'
       - name: Check download status
@@ -88,4 +96,3 @@ jobs:
         run: |
           echo "El workflow falló. Por favor revisa los logs para más detalles."
           exit 1
-
