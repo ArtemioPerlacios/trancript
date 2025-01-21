@@ -1,74 +1,100 @@
-name: Transcripción de video con Whisper
-
+name: Transcripción y Resumen Sharepoint
 on:
   workflow_dispatch:
     inputs:
       video_url:
-        description: "URL del video"
+        description: "URL del video de SharePoint"
         required: true
+      language:
+        description: "Idioma del video (es/en)"
+        required: true
+        default: 'es'
 
 jobs:
   transcribe-video:
     runs-on: ubuntu-latest
-
     steps:
-      # Paso 1: Descargar el código fuente
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      # Paso 2: Configurar Python
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: 3.8
+          python-version: '3.10'
+          cache: 'pip'
 
-      # Paso 3: Cachear dependencias de Python
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      # Paso 4: Instalar dependencias necesarias
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # Paso 5: Descargar el video usando yt-dlp
-      - name: Download video
-        run: yt-dlp -o "video_temp.mp4" "${{ github.event.inputs.video_url }}"
-
-      # Paso 6: Extraer audio del video (solo audio, sin video)
-      - name: Extract audio from video
+      - name: Install Python dependencies
         run: |
-          ffmpeg -i video_temp.mp4 -vn -acodec pcm_s16le -ar 44100 -ac 2 audio_temp.wav
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install yt-dlp
+      - name: Validate SharePoint URL
+        run: |
+          if [[ ! "${{ github.event.inputs.video_url }}" =~ .*sharepoint\.com.* ]]; then
+            echo "Error: La URL proporcionada no es de SharePoint"
+            exit 1
+          fi
 
-      # Paso 7: Ejecutar el script para transcribir el audio
+      - name: Save cookies
+        run: |
+          if [ -z "${{ secrets.SHAREPOINT_COOKIES }}" ]; then
+            echo "Error: No se encontraron las cookies de SharePoint"
+            exit 1
+          fi
+          echo "${{ secrets.SHAREPOINT_COOKIES }}" > cookies.txt
+
+      - name: Download video
+        id: download
+        continue-on-error: true
+        run: |
+          yt-dlp --cookies cookies.txt \
+                 -o "video_temp.%(ext)s" \
+                 '${{ github.event.inputs.video_url }}'
+      - name: Check download status
+        if: steps.download.outcome == 'failure'
+        run: |
+          echo "Error: No se pudo descargar el video. Verifica la URL y las cookies."
+          exit 1
       - name: Transcribe audio
-        run: python transcribe.py --audio audio_temp.wav
-
-      # Paso 8: Generar resumen utilizando la API de Groq
+        env:
+          WHISPER_MODEL: "base"
+          LANGUAGE: ${{ github.event.inputs.language }}
+        run: |
+          python transcribe.py \
+            --audio video_temp.mp4 \
+            --model ${WHISPER_MODEL} \
+            --language ${LANGUAGE}
       - name: Generate Summary
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: python summarize.py  # Llama al script que genera el resumen
-
-      # Paso 9: Subir los archivos como artefactos
-      - name: Upload transcription and summary
+        run: |
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "Error: No se encontró la API key de Groq"
+            exit 1
+          fi
+          python summarize.py
+      - name: Upload artifacts
+        if: success()
         uses: actions/upload-artifact@v3
         with:
-          name: transcription-and-summary
+          name: transcription-and-summary-${{ github.run_id }}
           path: |
             transcription.txt
             summary.md
+          retention-days: 7
 
-      # Paso 10: Limpiar archivos temporales
       - name: Cleanup
+        if: always()
         run: |
-          rm -f video_temp.mp4 audio_temp.wav transcription.txt summary.md || true
+          rm -f video_temp.* transcription.txt summary.md || true
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "El workflow falló. Por favor revisa los logs para más detalles."
+          exit 1
+
 
