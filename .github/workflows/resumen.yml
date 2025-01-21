@@ -39,13 +39,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
       
-      # Solo instala si no está en caché
+      # Instalación de dependencias Python
       - name: Install Python dependencies
-        if: steps.pip-cache.outputs.cache-hit != 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install yt-dlp openai-whisper
+          pip install openai-whisper
+
+      # Instalación específica de yt-dlp
+      - name: Install yt-dlp
+        run: |
+          python -m pip install --no-cache-dir yt-dlp
+          which yt-dlp || echo "yt-dlp no está en el PATH"
+          pip show yt-dlp
       
       - name: Save cookies
         run: |
@@ -89,10 +95,6 @@ jobs:
             transcription.txt
             summary.md
           retention-days: 7
-      
-      - name: Cleanup
-        if: always()
-        run: rm -f video_temp.* cookies.txt transcription.txt summary.md || true
       
       - name: Cleanup
         if: always()
