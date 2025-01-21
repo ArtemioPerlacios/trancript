@@ -1,100 +1,92 @@
 name: Transcripción y Resumen Sharepoint
 on:
-  workflow_dispatch:
-    inputs:
-      video_url:
-        description: "URL del video de SharePoint"
-        required: true
-      language:
-        description: "Idioma del video (es/en)"
-        required: true
-        default: 'es'
-
+ workflow_dispatch:
+   inputs:
+     video_url:
+       description: "URL del video de SharePoint"
+       required: true
+     language:
+       description: "Idioma del video (es/en)"
+       required: true
+       default: 'es'
 jobs:
-  transcribe-video:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          cache: 'pip'
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install yt-dlp
-      - name: Validate SharePoint URL
-        run: |
-          if [[ ! "${{ github.event.inputs.video_url }}" =~ .*sharepoint\.com.* ]]; then
-            echo "Error: La URL proporcionada no es de SharePoint"
-            exit 1
-          fi
-
-      - name: Save cookies
-        run: |
-          if [ -z "${{ secrets.SHAREPOINT_COOKIES }}" ]; then
-            echo "Error: No se encontraron las cookies de SharePoint"
-            exit 1
-          fi
-          echo "${{ secrets.SHAREPOINT_COOKIES }}" > cookies.txt
-
-      - name: Download video
-        id: download
-        continue-on-error: true
-        run: |
-          yt-dlp --cookies cookies.txt \
-                 -o "video_temp.%(ext)s" \
-                 '${{ github.event.inputs.video_url }}'
-      - name: Check download status
-        if: steps.download.outcome == 'failure'
-        run: |
-          echo "Error: No se pudo descargar el video. Verifica la URL y las cookies."
-          exit 1
-      - name: Transcribe audio
-        env:
-          WHISPER_MODEL: "base"
-          LANGUAGE: ${{ github.event.inputs.language }}
-        run: |
-          python transcribe.py \
-            --audio video_temp.mp4 \
-            --model ${WHISPER_MODEL} \
-            --language ${LANGUAGE}
-      - name: Generate Summary
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          if [ -z "$GROQ_API_KEY" ]; then
-            echo "Error: No se encontró la API key de Groq"
-            exit 1
-          fi
-          python summarize.py
-      - name: Upload artifacts
-        if: success()
-        uses: actions/upload-artifact@v3
-        with:
-          name: transcription-and-summary-${{ github.run_id }}
-          path: |
-            transcription.txt
-            summary.md
-          retention-days: 7
-
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -f video_temp.* transcription.txt summary.md || true
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "El workflow falló. Por favor revisa los logs para más detalles."
-          exit 1
-
-
+ transcribe-video:
+   runs-on: ubuntu-latest
+   steps:
+     - name: Checkout repository
+       uses: actions/checkout@v3
+     - name: Set up Python
+       uses: actions/setup-python@v4
+       with:
+         python-version: '3.10'
+         cache: 'pip'
+     - name: Install system dependencies
+       run: |
+         sudo apt-get update
+         sudo apt-get install -y ffmpeg
+     - name: Install Python dependencies
+       run: |
+         python -m pip install --upgrade pip
+         pip install -r requirements.txt
+         pip install yt-dlp
+     - name: Validate SharePoint URL
+       run: |
+         if [[ ! "${{ github.event.inputs.video_url }}" =~ .*sharepoint\.com.* ]]; then
+           echo "Error: La URL proporcionada no es de SharePoint"
+           exit 1
+         fi
+     - name: Setup SharePoint authentication
+       run: |
+         echo "# Netscape HTTP Cookie File" > cookies.txt
+         echo "# https://curl.haxx.se/docs/http-cookies.html" >> cookies.txt
+         DOMAIN=$(echo "${{ github.event.inputs.video_url }}" | sed -n 's/.*\/\/\([^/]*\)\/.*/\1/p')
+         echo "$DOMAIN	FALSE	/	TRUE	1737897864	FedAuth	${{ secrets.FEDAUTH_COOKIE }}" >> cookies.txt
+         echo "$DOMAIN	FALSE	/	TRUE	1737897864	rtFa	${{ secrets.RTFA_COOKIE }}" >> cookies.txt
+     - name: Download video
+       id: download
+       continue-on-error: true
+       run: |
+         yt-dlp --cookies cookies.txt \
+                -o "video_temp.%(ext)s" \
+                '${{ github.event.inputs.video_url }}'
+     - name: Check download status
+       if: steps.download.outcome == 'failure'
+       run: |
+         echo "Error: No se pudo descargar el video. Verifica la URL y las credenciales."
+         exit 1
+     - name: Transcribe audio
+       env:
+         WHISPER_MODEL: "base"
+         LANGUAGE: ${{ github.event.inputs.language }}
+       run: |
+         python transcribe.py \
+           --audio video_temp.mp4 \
+           --model ${WHISPER_MODEL} \
+           --language ${LANGUAGE}
+     - name: Generate Summary
+       env:
+         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+       run: |
+         if [ -z "$GROQ_API_KEY" ]; then
+           echo "Error: No se encontró la API key de Groq"
+           exit 1
+         fi
+         python summarize.py
+     - name: Upload artifacts
+       if: success()
+       uses: actions/upload-artifact@v3
+       with:
+         name: transcription-and-summary-${{ github.run_id }}
+         path: |
+           transcription.txt
+           summary.md
+         retention-days: 7
+     - name: Cleanup
+       if: always()
+       run: |
+         rm -f video_temp.* cookies.txt transcription.txt summary.md || true
+     - name: Notify on failure
+       if: failure()
+       run: |
+         echo "El workflow falló. Por favor revisa los logs para más detalles."
+         exit 1
