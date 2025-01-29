@@ -7,7 +7,7 @@ parser.add_argument('--audio', type=str, help='Path to audio file', required=Tru
 args = parser.parse_args()
 
 # Cargar el modelo
-model = whisper.load_model("base")
+model = whisper.load_model("medium")
 
 # Transcribir el archivo de audio
 result = model.transcribe(args.audio)
