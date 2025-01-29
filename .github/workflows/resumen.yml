@@ -1,4 +1,5 @@
-name: Transcripción y Resumen Sharepoint
+name: Transcripción y Resumen SharePoint
+
 on:
   workflow_dispatch:
     inputs:
@@ -8,36 +9,37 @@ on:
       language:
         description: "Idioma del video (es/en)"
         required: true
-        default: 'es'
+        default: "es"
+
 jobs:
   transcribe-video:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
-      
+          python-version: "3.10"
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-      
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install openai-whisper
           pip install yt-dlp
-      
+
       - name: Save cookies
         run: |
           echo "${{ secrets.SHAREPOINT_COOKIES }}" > cookies.txt
           chmod 600 cookies.txt
-      
+
       - name: Download video
         id: download
         run: |
@@ -45,17 +47,29 @@ jobs:
                  --no-warnings \
                  -o "video_temp.%(ext)s" \
                  "${{ github.event.inputs.video_url }}"
-      
+          
+          # Mostrar archivos descargados para depuración
+          ls -lh video_temp.*
+
+          # Obtener el nombre del archivo descargado
+          echo "VIDEO_FILE=$(ls video_temp.* | head -n 1)" >> $GITHUB_ENV
+
       - name: Transcribe audio
-        run: python transcribe.py --audio video_temp.mp4
-      
+        run: |
+          if [ -z "$VIDEO_FILE" ]; then
+            echo "Error: No se encontró ningún archivo de video descargado"
+            exit 1
+          fi
+          echo "Procesando archivo: $VIDEO_FILE"
+          python transcribe.py --audio "$VIDEO_FILE"
+
       - name: Verify prompt file
         run: |
           if [ ! -f "prompt1.md" ]; then
             echo "Error: No se encontró el archivo prompt1.md"
             exit 1
           fi
-      
+
       - name: Generate Summary
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -65,7 +79,7 @@ jobs:
             exit 1
           fi
           python summarize.py
-      
+
       - name: Upload artifacts
         if: success()
         uses: actions/upload-artifact@v3
@@ -75,7 +89,9 @@ jobs:
             transcription.txt
             summary.md
           retention-days: 7
-      
+
       - name: Cleanup
         if: always()
-        run: rm -f video_temp.* cookies.txt transcription.txt summary.md || true
+        run: |
+          rm -f video_temp.* cookies.txt transcription.txt summary.md || true
+
