@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload artifacts
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: transcription-and-summary-${{ github.run_id }}
           path: |
@@ -94,4 +94,3 @@ jobs:
         if: always()
         run: |
           rm -f video_temp.* cookies.txt transcription.txt summary.md || true
-
