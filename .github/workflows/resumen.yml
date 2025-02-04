@@ -13,7 +13,8 @@ on:
 
 jobs:
   transcribe-video:
-    runs-on: ubuntu-latest
+    #runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
